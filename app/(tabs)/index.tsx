@@ -69,7 +69,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#c3e4c5', '#d3c2e5']}
+        colors={['#a8e0b0', '#ffffff', '#ccaadd']}
         style={styles.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -97,7 +97,7 @@ export default function HomeScreen() {
                         <View style={styles.chartContent}>
                             <Ionicons name="arrow-up-outline" size={24} color="#333" style={{ marginBottom: 4, opacity: 0.8 }} />
                             <Text style={styles.balanceAmount}>
-                                {formatCurrency(totalExpenses)}
+                                {formatCurrency(balance)}
                             </Text>
                             <View style={styles.percentageBadge}>
                                 <Ionicons name="speedometer-outline" size={12} color="#333" />
@@ -192,12 +192,12 @@ const styles = StyleSheet.create({
   },
   welcomeText: {
     fontSize: 16,
-    color: '#333',
+    color: '#fff',
     fontWeight: '600',
   },
   dateText: {
     fontSize: 14,
-    color: '#666',
+    color: 'rgba(255,255,255,0.8)',
     marginTop: 2,
   },
   notificationButton: {

@@ -51,7 +51,7 @@ export function CircularProgress({
           />
         </G>
       </Svg>
-      <View style={StyleSheet.absoluteFillObject}>
+      <View style={[StyleSheet.absoluteFillObject, { justifyContent: 'center', alignItems: 'center' }]}>
         {children}
       </View>
     </View>

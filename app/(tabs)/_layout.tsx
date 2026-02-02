@@ -17,18 +17,19 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarShowLabel: false,
         tabBarStyle: Platform.select({
           ios: {
             position: 'absolute',
             backgroundColor: 'transparent',
             borderTopWidth: 0,
             elevation: 0,
-            height: 85,
-            paddingBottom: 25,
+            height: 60,
+            paddingBottom: 5,
           },
           default: {
-            height: 65,
-            paddingBottom: 10,
+            height: 55,
+            paddingBottom: 5,
           },
         }),
         tabBarBackground: () => (
@@ -39,29 +40,29 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "home" : "home-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={28} name={focused ? "home" : "home-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
         name="subscriptions"
         options={{
           title: 'Subs',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "calendar" : "calendar-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={28} name={focused ? "calendar" : "calendar-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
         name="add"
         options={{
           title: '',
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: () => (
             <View style={{ 
-                backgroundColor: Colors[colorScheme ?? 'light'].tint, 
-                width: 50, 
-                height: 50, 
-                borderRadius: 25, 
+                backgroundColor: '#333', 
+                width: 56, 
+                height: 56, 
+                borderRadius: 28, 
                 justifyContent: 'center', 
                 alignItems: 'center',
-                marginBottom: 20,
+                marginBottom: 30,
                 shadowColor: "#000",
                 shadowOffset: {
                     width: 0,
@@ -86,14 +87,14 @@ export default function TabLayout() {
         name="list"
         options={{
           title: 'List',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "list" : "list-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={28} name={focused ? "list" : "list-outline"} color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ color, focused }) => <Ionicons size={24} name={focused ? "settings" : "settings-outline"} color={color} />,
+          tabBarIcon: ({ color, focused }) => <Ionicons size={28} name={focused ? "settings" : "settings-outline"} color={color} />,
         }}
       />
     </Tabs>
