@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import 'react-native-reanimated';
+import '../global.css';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useDatabaseInit } from '@/hooks/use-database';
@@ -39,6 +40,7 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="add-transaction" options={{ presentation: 'modal', headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />

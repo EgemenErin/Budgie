@@ -1,190 +1,174 @@
-import { useState, useCallback } from 'react';
-import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  RefreshControl,
-  Alert,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 
-import { useTransactions, useTransactionSummary, getCurrentMonthRange } from '@/hooks/use-database';
-import { useCurrency } from '@/hooks/use-settings';
-import { Transaction, TransactionCategory, CATEGORY_INFO } from '@/database';
+import { useTransactions, useTransactionSummary, useSettings, getTodayRange, getCurrentMonthRange } from '@/hooks/use-database';
+import { CATEGORY_INFO } from '@/database/schema';
+
+import { CircularProgress } from '@/components/ui/circular-progress';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { startDate, endDate } = getCurrentMonthRange();
-  const { transactions, isLoading, refresh, add, remove } = useTransactions({ limit: 50 });
-  const { summary, refresh: refreshSummary } = useTransactionSummary(startDate, endDate);
-  const { formatAmount } = useCurrency();
-  const [refreshing, setRefreshing] = useState(false);
+  
+  const { summary, isLoading: isLoadingSummary, refresh: refreshSummary } = useTransactionSummary(startDate, endDate);
+  const { transactions, isLoading: isLoadingTransactions, refresh: refreshTransactions } = useTransactions({ limit: 10 });
+  const { settings, isLoading: isLoadingSettings, refresh: refreshSettings } = useSettings();
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([refresh(), refreshSummary()]);
-    setRefreshing(false);
-  }, [refresh, refreshSummary]);
+  const onRefresh = React.useCallback(() => {
+    refreshSummary();
+    refreshTransactions();
+    refreshSettings();
+  }, [refreshSummary, refreshTransactions, refreshSettings]);
 
-  const handleAddTransaction = useCallback(async (type: 'income' | 'expense') => {
-    const categories: TransactionCategory[] = type === 'income' 
-      ? ['salary', 'freelance', 'gift']
-      : ['food', 'transportation', 'shopping', 'entertainment'];
-    
-    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-    const randomAmount = Math.floor(Math.random() * 100) + 10;
+  useFocusEffect(
+    React.useCallback(() => {
+      onRefresh();
+    }, [onRefresh])
+  );
 
-    try {
-      await add({
-        amount: randomAmount,
-        type,
-        category: randomCategory,
-        description: `Sample ${type}`,
-      });
-      await refreshSummary();
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add transaction');
+  const isLoading = isLoadingSummary || isLoadingTransactions || isLoadingSettings;
+  const balance = summary?.balance ?? 0;
+  const totalIncome = summary?.totalIncome ?? 0;
+  const totalExpenses = summary?.totalExpenses ?? 0;
+  
+  // Safe to spend = (Income - Expenses) / Days remaining in month
+  const today = new Date();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const daysRemaining = Math.max(1, daysInMonth - today.getDate());
+  const safeToSpend = Math.max(0, (totalIncome - totalExpenses) / daysRemaining);
+
+  const dangerZoneAmount = settings?.dangerZoneAmount ?? 0;
+  const isDanger = balance < dangerZoneAmount;
+  const currency = settings?.currency ?? 'USD';
+
+  // Calculate progress: Expenses / Income (capped at 1)
+  const progress = totalIncome > 0 ? Math.min(1, totalExpenses / totalIncome) : 0;
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: currency,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const formatDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const today = new Date();
+    if (date.toDateString() === today.toDateString()) {
+      return `Today, ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
-  }, [add, refreshSummary]);
-
-  const handleDeleteTransaction = useCallback(async (id: string) => {
-    Alert.alert(
-      'Delete Transaction',
-      'Are you sure you want to delete this transaction?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await remove(id);
-              await refreshSummary();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete transaction');
-            }
-          },
-        },
-      ]
-    );
-  }, [remove, refreshSummary]);
-
-  const renderTransaction = ({ item }: { item: Transaction }) => {
-    const categoryInfo = CATEGORY_INFO[item.category];
-    const isIncome = item.type === 'income';
-    
-    return (
-      <TouchableOpacity
-        style={styles.transactionItem}
-        onLongPress={() => handleDeleteTransaction(item.id)}
-      >
-        <View style={styles.transactionLeft}>
-          <Text style={styles.transactionEmoji}>{categoryInfo?.emoji || '💵'}</Text>
-          <View>
-            <Text style={styles.transactionCategory}>
-              {categoryInfo?.label || item.category}
-            </Text>
-            <Text style={styles.transactionDate}>
-              {new Date(item.timestamp).toLocaleDateString()}
-            </Text>
-          </View>
-        </View>
-        <Text style={[
-          styles.transactionAmount,
-          isIncome ? styles.incomeAmount : styles.expenseAmount
-        ]}>
-          {isIncome ? '+' : '-'}{formatAmount(item.amount)}
-        </Text>
-      </TouchableOpacity>
-    );
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Budgie</Text>
-        <Text style={styles.headerSubtitle}>Local-First Budget Tracker</Text>
-      </View>
-
-      {/* Summary Card */}
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>This Month</Text>
-        <View style={styles.summaryRow}>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Income</Text>
-            <Text style={[styles.summaryValue, styles.incomeAmount]}>
-              {formatAmount(summary?.totalIncome ?? 0)}
-            </Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Expenses</Text>
-            <Text style={[styles.summaryValue, styles.expenseAmount]}>
-              {formatAmount(summary?.totalExpenses ?? 0)}
-            </Text>
-          </View>
-          <View style={styles.summaryItem}>
-            <Text style={styles.summaryLabel}>Balance</Text>
-            <Text style={[
-              styles.summaryValue,
-              (summary?.balance ?? 0) >= 0 ? styles.incomeAmount : styles.expenseAmount
-            ]}>
-              {formatAmount(summary?.balance ?? 0)}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Quick Add Buttons */}
-      <View style={styles.quickAddContainer}>
-        <TouchableOpacity
-          style={[styles.quickAddButton, styles.incomeButton]}
-          onPress={() => handleAddTransaction('income')}
-        >
-          <Text style={styles.quickAddText}>+ Income</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickAddButton, styles.expenseButton]}
-          onPress={() => handleAddTransaction('expense')}
-        >
-          <Text style={styles.quickAddText}>+ Expense</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Offline Indicator */}
-      <View style={styles.offlineIndicator}>
-        <Text style={styles.offlineText}>
-          100% Offline - Data stored on device
-        </Text>
-      </View>
-
-      {/* Transactions List */}
-      <View style={styles.transactionsContainer}>
-        <Text style={styles.sectionTitle}>
-          Recent Transactions ({summary?.transactionCount ?? 0})
-        </Text>
-        <FlatList
-          data={transactions}
-          keyExtractor={(item) => item.id}
-          renderItem={renderTransaction}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                {isLoading ? 'Loading...' : 'No transactions yet'}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                Tap the buttons above to add your first transaction
-              </Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#c3e4c5', '#d3c2e5']}
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <SafeAreaView style={styles.safeArea}>
+            <View style={styles.header}>
+                <View>
+                    <Text style={styles.welcomeText}>Welcome back</Text>
+                    <Text style={styles.dateText}>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</Text>
+                </View>
+                <TouchableOpacity onPress={() => router.push('/notifications')} style={styles.notificationButton}>
+                   {/* Notification logic here if needed */}
+                </TouchableOpacity>
             </View>
-          }
-          contentContainerStyle={transactions.length === 0 ? styles.emptyList : undefined}
-        />
+
+            <View style={styles.balanceContainer}>
+                <View style={styles.chartContainer}>
+                    <CircularProgress
+                        size={220}
+                        strokeWidth={20}
+                        progress={progress}
+                        color="#111" // Dark for contrast on light bg
+                        backgroundColor="rgba(255,255,255,0.5)"
+                    >
+                        <View style={styles.chartContent}>
+                            <Ionicons name="arrow-up-outline" size={24} color="#333" style={{ marginBottom: 4, opacity: 0.8 }} />
+                            <Text style={styles.balanceAmount}>
+                                {formatCurrency(totalExpenses)}
+                            </Text>
+                            <View style={styles.percentageBadge}>
+                                <Ionicons name="speedometer-outline" size={12} color="#333" />
+                                <Text style={styles.percentageText}>{Math.round(progress * 100)}% Spent</Text>
+                            </View>
+                        </View>
+                    </CircularProgress>
+                </View>
+
+                <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Income</Text>
+                        <Text style={styles.statValue}>{formatCurrency(totalIncome)}</Text>
+                    </View>
+                    <View style={[styles.statItem, styles.statBorder]}>
+                        <Text style={styles.statLabel}>Balance</Text>
+                        <Text style={[styles.statValue, isDanger && styles.balanceDanger]}>
+                            {formatCurrency(balance)}
+                        </Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statLabel}>Safe to spend</Text>
+                        <Text style={styles.statValue}>{formatCurrency(safeToSpend)}/day</Text>
+                    </View>
+                </View>
+            </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <View style={styles.contentContainer}>
+        <View style={styles.dragHandle} />
+        <Text style={styles.sectionTitle}>Recent Transactions</Text>
+        
+        <ScrollView 
+            style={styles.transactionsList}
+            refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} />}
+            showsVerticalScrollIndicator={false}
+        >
+            {transactions.map((t) => (
+                <View key={t.id} style={styles.transactionItem}>
+                    <View style={styles.transactionIconContainer}>
+                        <Text style={styles.transactionEmoji}>
+                            {CATEGORY_INFO[t.category]?.emoji ?? '📝'}
+                        </Text>
+                    </View>
+                    <View style={styles.transactionDetails}>
+                        <Text style={styles.transactionCategory}>
+                            {CATEGORY_INFO[t.category]?.label ?? t.category}
+                        </Text>
+                        <Text style={styles.transactionDate}>{formatDate(t.timestamp)}</Text>
+                    </View>
+                    <Text style={[
+                        styles.transactionAmount,
+                        t.type === 'income' ? styles.incomeText : styles.expenseText
+                    ]}>
+                        {t.type === 'income' ? '+' : ''}{formatCurrency(t.amount)}
+                    </Text>
+                </View>
+            ))}
+            
+            {transactions.length === 0 && !isLoading && (
+                <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No transactions yet</Text>
+                </View>
+            )}
+            
+            <View style={{ height: 100 }} /> 
+        </ScrollView>
       </View>
-    </SafeAreaView>
+      <StatusBar style="dark" />
+    </View>
   );
 }
 
@@ -193,146 +177,168 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  header: {
+  gradient: {
+    paddingBottom: 40,
+  },
+  safeArea: {
     paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 5,
   },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#4CAF50',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  summaryCard: {
-    margin: 20,
-    padding: 20,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 15,
-  },
-  summaryRow: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  summaryItem: {
     alignItems: 'center',
+    marginBottom: 30,
+    marginTop: 10,
   },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  incomeAmount: {
-    color: '#4CAF50',
-  },
-  expenseAmount: {
-    color: '#f44336',
-  },
-  quickAddContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  quickAddButton: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  incomeButton: {
-    backgroundColor: '#4CAF50',
-  },
-  expenseButton: {
-    backgroundColor: '#f44336',
-  },
-  quickAddText: {
-    color: '#fff',
+  welcomeText: {
     fontSize: 16,
+    color: '#333',
     fontWeight: '600',
   },
-  offlineIndicator: {
-    marginTop: 15,
+  dateText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  notificationButton: {
+    padding: 8,
+  },
+  balanceContainer: {
+    alignItems: 'center',
+    marginBottom: 30,
+    width: '100%',
+  },
+  chartContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+  },
+  chartContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  balanceAmount: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#111',
+    marginBottom: 4,
+  },
+  percentageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  percentageText: {
+    color: '#333',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 10,
+  },
+  statItem: {
+    flex: 1,
     alignItems: 'center',
   },
-  offlineText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '500',
+  statBorder: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
   },
-  transactionsContainer: {
+  statLabel: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#111',
+  },
+  balanceDanger: {
+    color: '#ff4b4b',
+  },
+  contentContainer: {
     flex: 1,
-    marginTop: 20,
+    backgroundColor: '#fff',
+    marginTop: -20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  dragHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
-    marginBottom: 12,
+    marginBottom: 16,
+  },
+  transactionsList: {
+    flex: 1,
   },
   transactionItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  transactionLeft: {
-    flexDirection: 'row',
+  transactionIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    marginRight: 12,
   },
   transactionEmoji: {
-    fontSize: 24,
+    fontSize: 20,
+  },
+  transactionDetails: {
+    flex: 1,
   },
   transactionCategory: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
+    marginBottom: 4,
   },
   transactionDate: {
     fontSize: 12,
-    color: '#999',
+    color: '#888',
   },
   transactionAmount: {
     fontSize: 16,
     fontWeight: 'bold',
   },
-  emptyContainer: {
+  incomeText: {
+    color: '#4CAF50',
+  },
+  expenseText: {
+    color: '#333',
+  },
+  emptyState: {
+    padding: 40,
     alignItems: 'center',
-    paddingVertical: 40,
   },
-  emptyText: {
+  emptyStateText: {
+    color: '#888',
     fontSize: 16,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-  },
-  emptyList: {
-    flexGrow: 1,
   },
 });

@@ -14,8 +14,15 @@ import {
   getTransactionSummary,
   getSpendingByCategory,
   getDatabaseStats,
+  getSettings,
+  updateSettings,
+  getSubscriptions,
+  addSubscription,
+  deleteSubscription,
   Transaction,
   TransactionInput,
+  Subscription,
+  UserSettings,
 } from '@/database';
 
 // ============================================
@@ -250,6 +257,77 @@ export function useDatabaseStats() {
   }, [fetchStats]);
 
   return { stats, isLoading, refresh: fetchStats };
+}
+
+// ============================================
+// SUBSCRIPTIONS HOOK
+// ============================================
+
+export function useSubscriptions() {
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSubscriptions = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await getSubscriptions();
+      setSubscriptions(data);
+    } catch (err) {
+      console.error('[useSubscriptions] Error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSubscriptions();
+  }, [fetchSubscriptions]);
+
+  const add = useCallback(async (input: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const sub = await addSubscription(input);
+    setSubscriptions(prev => [...prev, sub].sort((a, b) => a.nextBillingDate - b.nextBillingDate));
+    return sub;
+  }, []);
+
+  const remove = useCallback(async (id: string) => {
+    await deleteSubscription(id);
+    setSubscriptions(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  return { subscriptions, isLoading, add, remove, refresh: fetchSubscriptions };
+}
+
+// ============================================
+// SETTINGS HOOK
+// ============================================
+
+export function useSettings() {
+  const [settings, setSettings] = useState<UserSettings | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const data = await getSettings();
+      setSettings(data);
+    } catch (err) {
+      console.error('[useSettings] Error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
+
+  const update = useCallback(async (updates: Partial<UserSettings>) => {
+    const updated = await updateSettings(updates);
+    setSettings(updated);
+    return updated;
+  }, []);
+
+  return { settings, isLoading, update, refresh: fetchSettings };
 }
 
 // ============================================

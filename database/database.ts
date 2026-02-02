@@ -6,7 +6,7 @@
  */
 
 import * as SQLite from 'expo-sqlite';
-import { Transaction, TransactionInput, Budget } from './schema';
+import { Transaction, TransactionInput, Budget, Subscription, UserSettings } from './schema';
 
 // Database instance
 let db: SQLite.SQLiteDatabase | null = null;
@@ -77,6 +77,46 @@ export async function initDatabase(): Promise<SQLite.SQLiteDatabase> {
       updatedAt INTEGER NOT NULL
     );
   `);
+
+  // Create subscriptions table
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id TEXT PRIMARY KEY NOT NULL,
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      currency TEXT NOT NULL,
+      billingPeriod TEXT NOT NULL CHECK (billingPeriod IN ('weekly', 'monthly', 'yearly')),
+      nextBillingDate INTEGER NOT NULL,
+      notificationEnabled INTEGER NOT NULL DEFAULT 0,
+      category TEXT NOT NULL,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+  `);
+
+  // Create settings table
+  await db.execAsync(`
+    CREATE TABLE IF NOT EXISTS settings (
+      id TEXT PRIMARY KEY NOT NULL,
+      dangerZoneAmount REAL NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT 'USD',
+      theme TEXT NOT NULL DEFAULT 'system',
+      notificationsEnabled INTEGER NOT NULL DEFAULT 1,
+      createdAt INTEGER NOT NULL,
+      updatedAt INTEGER NOT NULL
+    );
+  `);
+
+  // Initialize default settings if not exists
+  const settingsCount = await db.getFirstAsync<{ count: number }>('SELECT COUNT(*) as count FROM settings');
+  if (settingsCount && settingsCount.count === 0) {
+    const now = Date.now();
+    await db.runAsync(
+      `INSERT INTO settings (id, dangerZoneAmount, currency, theme, notificationsEnabled, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ['default', 100, 'USD', 'system', 1, now, now]
+    );
+  }
 
   console.log('[Database] Initialized successfully');
   return db;
@@ -390,6 +430,111 @@ export async function deleteBudget(category: string): Promise<boolean> {
   );
 
   return result.changes > 0;
+}
+
+// ============================================
+// SUBSCRIPTION OPERATIONS
+// ============================================
+
+export async function addSubscription(input: Omit<Subscription, 'id' | 'createdAt' | 'updatedAt'>): Promise<Subscription> {
+  const database = getDatabase();
+  const now = Date.now();
+  
+  const subscription: Subscription = {
+    id: generateUUID(),
+    ...input,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await database.runAsync(
+    `INSERT INTO subscriptions (id, name, amount, currency, billingPeriod, nextBillingDate, notificationEnabled, category, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      subscription.id,
+      subscription.name,
+      subscription.amount,
+      subscription.currency,
+      subscription.billingPeriod,
+      subscription.nextBillingDate,
+      subscription.notificationEnabled ? 1 : 0,
+      subscription.category,
+      subscription.createdAt,
+      subscription.updatedAt,
+    ]
+  );
+
+  return subscription;
+}
+
+export async function getSubscriptions(): Promise<Subscription[]> {
+  const database = getDatabase();
+  const results = await database.getAllAsync<any>('SELECT * FROM subscriptions ORDER BY nextBillingDate ASC');
+  return results.map(sub => ({
+    ...sub,
+    notificationEnabled: sub.notificationEnabled === 1
+  }));
+}
+
+export async function deleteSubscription(id: string): Promise<boolean> {
+  const database = getDatabase();
+  const result = await database.runAsync('DELETE FROM subscriptions WHERE id = ?', [id]);
+  return result.changes > 0;
+}
+
+// ============================================
+// SETTINGS OPERATIONS
+// ============================================
+
+export async function getSettings(): Promise<UserSettings> {
+  const database = getDatabase();
+  const result = await database.getFirstAsync<any>('SELECT * FROM settings WHERE id = ?', ['default']);
+  
+  if (!result) {
+    // Should have been created in init, but fallback just in case
+    return {
+      id: 'default',
+      dangerZoneAmount: 0,
+      currency: 'USD',
+      theme: 'system',
+      notificationsEnabled: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  }
+
+  return {
+    ...result,
+    notificationsEnabled: result.notificationsEnabled === 1
+  };
+}
+
+export async function updateSettings(updates: Partial<UserSettings>): Promise<UserSettings> {
+  const database = getDatabase();
+  const now = Date.now();
+  const current = await getSettings();
+  
+  const updated: UserSettings = {
+    ...current,
+    ...updates,
+    updatedAt: now
+  };
+
+  await database.runAsync(
+    `UPDATE settings 
+     SET dangerZoneAmount = ?, currency = ?, theme = ?, notificationsEnabled = ?, updatedAt = ?
+     WHERE id = ?`,
+    [
+      updated.dangerZoneAmount,
+      updated.currency,
+      updated.theme,
+      updated.notificationsEnabled ? 1 : 0,
+      updated.updatedAt,
+      'default'
+    ]
+  );
+
+  return updated;
 }
 
 // ============================================

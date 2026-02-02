@@ -21,6 +21,13 @@ export {
   setBudget,
   getBudgets,
   deleteBudget,
+  // Subscription operations
+  addSubscription,
+  getSubscriptions,
+  deleteSubscription,
+  // Settings operations
+  getSettings,
+  updateSettings,
   // Utility functions
   clearAllData,
   getDatabaseStats,
@@ -33,37 +40,9 @@ export {
   type TransactionType,
   type TransactionCategory,
   type Budget,
+  type Subscription,
+  type UserSettings,
   CATEGORY_INFO,
   INCOME_CATEGORIES,
   EXPENSE_CATEGORIES,
 } from './schema';
-
-// Settings
-export {
-  getCurrency,
-  setCurrency,
-  getTheme,
-  setTheme,
-  getNotificationsEnabled,
-  setNotificationsEnabled,
-  getDailyReminderTime,
-  setDailyReminderTime,
-  getBiometricEnabled,
-  setBiometricEnabled,
-  getOnboardingCompleted,
-  setOnboardingCompleted,
-  getLastSyncTime,
-  setLastSyncTime,
-  getDefaultTransactionType,
-  setDefaultTransactionType,
-  getWeekStartDay,
-  setWeekStartDay,
-  getAllSettings,
-  resetAllSettings,
-  isFirstLaunch,
-  CURRENCY_INFO,
-  type CurrencyCode,
-  type ThemeMode,
-  type WeekStartDay,
-  type AppSettings,
-} from './settings';

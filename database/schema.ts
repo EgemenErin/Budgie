@@ -45,12 +45,27 @@ export interface TransactionInput {
   timestamp?: number;
 }
 
-// Budget interface for category budgets
-export interface Budget {
+// Subscription interface
+export interface Subscription {
   id: string;
-  category: TransactionCategory;
+  name: string;
   amount: number;
-  period: 'weekly' | 'monthly' | 'yearly';
+  currency: string;
+  billingPeriod: 'weekly' | 'monthly' | 'yearly';
+  nextBillingDate: number; // Unix timestamp
+  notificationEnabled: boolean;
+  category: TransactionCategory;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// User Settings interface
+export interface UserSettings {
+  id: string; // usually just 'default'
+  dangerZoneAmount: number; // Amount below which balance turns red
+  currency: string;
+  theme: 'light' | 'dark' | 'system';
+  notificationsEnabled: boolean;
   createdAt: number;
   updatedAt: number;
 }
