@@ -24,12 +24,14 @@ export default function TabLayout() {
             backgroundColor: 'transparent',
             borderTopWidth: 0,
             elevation: 0,
-            height: 60,
-            paddingBottom: 5,
+            height: 90,
+            paddingTop: 15,
+            paddingBottom: 20,
           },
           default: {
-            height: 55,
-            paddingBottom: 5,
+            height: 70,
+            paddingTop: 10,
+            paddingBottom: 10,
           },
         }),
         tabBarBackground: () => (
